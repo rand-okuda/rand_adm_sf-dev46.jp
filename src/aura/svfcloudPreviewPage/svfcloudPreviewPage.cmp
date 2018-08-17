@@ -1,0 +1,8 @@
+<aura:component implements="force:lightningQuickActionWithoutHeader,force:hasRecordId,force:appHostable" >
+    
+	<aura:handler name="init" value="{!this}" action="{!c.doInit}" />
+
+    <lightning:spinner variant="brand" size="large"/>
+    <H1>プレビュー画面に移動します。</H1>
+    
+</aura:component>
