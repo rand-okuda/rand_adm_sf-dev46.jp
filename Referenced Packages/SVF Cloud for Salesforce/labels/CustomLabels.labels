@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
+    <labels>
+        <fullName>ALL_RECORDS_ALREADY_PRINTED</fullName>
+        <categories>MESSAGE</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ALL_RECORDS_ALREADY_PRINTED</shortDescription>
+        <value>All records have already been printed.</value>
+    </labels>
+    <labels>
+        <fullName>NO_SELECTED_ITEM</fullName>
+        <categories>MESSAGE</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>NO_SELECTED_ITEM</shortDescription>
+        <value>Please select a field.</value>
+    </labels>
+    <labels>
+        <fullName>ONE_OR_MORE_RECORDS_ALREADY_PRINTED</fullName>
+        <categories>MESSAGE</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ONE_OR_MORE_RECORDS_ALREADY_PRINTED</shortDescription>
+        <value>One or more records have already been printed.</value>
+    </labels>
+    <labels>
+        <fullName>PROCESSING_REQUEST</fullName>
+        <categories>ALERT</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>PROCESSING_REQUEST</shortDescription>
+        <value>Please wait a while and then try again.</value>
+    </labels>
+</CustomLabels>

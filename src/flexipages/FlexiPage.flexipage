@@ -3,10 +3,26 @@
     <flexiPageRegions>
         <componentInstances>
             <componentInstanceProperties>
-                <name>context</name>
-                <value>NEWS</value>
+                <name>enableInlineEdit</name>
+                <value>false</value>
             </componentInstanceProperties>
-            <componentName>forceChatter:exposedFeed</componentName>
+            <componentInstanceProperties>
+                <name>entityName</name>
+                <value>Inspection__c</value>
+            </componentInstanceProperties>
+            <componentInstanceProperties>
+                <name>filterName</name>
+                <value>All</value>
+            </componentInstanceProperties>
+            <componentInstanceProperties>
+                <name>hideActionBar</name>
+                <value>false</value>
+            </componentInstanceProperties>
+            <componentInstanceProperties>
+                <name>pageSize</name>
+                <value>30</value>
+            </componentInstanceProperties>
+            <componentName>flexipage:filterListCard</componentName>
         </componentInstances>
         <mode>Replace</mode>
         <name>top</name>
@@ -24,10 +40,11 @@
     </flexiPageRegions>
     <flexiPageRegions>
         <componentInstances>
-            <componentName>home:eventContainer</componentName>
-        </componentInstances>
-        <componentInstances>
-            <componentName>home:recentRecordContainer</componentName>
+            <componentInstanceProperties>
+                <name>context</name>
+                <value>NEWS</value>
+            </componentInstanceProperties>
+            <componentName>forceChatter:exposedFeed</componentName>
         </componentInstances>
         <mode>Replace</mode>
         <name>sidebar</name>

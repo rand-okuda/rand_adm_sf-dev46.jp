@@ -10,6 +10,7 @@
     <tab>standard-Campaign</tab>
     <tab>standard-Task</tab>
     <tab>standard-Event</tab>
+    <tab>standard-ContentNote</tab>
     <tab>standard-report</tab>
     <tab>standard-Dashboard</tab>
     <tab>standard-Feed</tab>

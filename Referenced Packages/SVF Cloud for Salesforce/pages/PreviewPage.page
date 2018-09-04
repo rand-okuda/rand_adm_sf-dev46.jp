@@ -1,0 +1,290 @@
+<apex:page id="pg" controller="svfcloud.PreviewController" showHeader="false" sidebar="false" action="{!init}">
+<apex:includeScript value="{!URLFOR(ResourceRootPath + '/lib/js/jquery-1.8.3.min.js')}"/>
+<apex:includeScript value="{!URLFOR(ResourceRootPath + '/config/default.js')}"/>
+<apex:includeScript value="{!URLFOR(ResourceRootPath + '/config/' + OrganizationId + '.js')}"/>
+<apex:includeScript value="/canvas/sdk/js/38.0/controller.js" />
+
+    <div style='display:{!IF(errorMessage=="","none;","block;")}'><div class='header'><div class='logo' unselectable='on' /></div><div class='svfMessage'>{!errorMessage}</div></div>
+    <apex:messages id="msg"/>
+    <script type="text/javascript">
+    
+    function useOAuth(){
+      if ( typeof svfcloudConfig === 'undefined' ) {
+        return true;
+      } else {
+        return svfcloudConfig.canvas.auth.type == 'oauth';
+      }
+    }
+    
+    function popupWithRepeatCheck(){
+
+        var key = 'svfcloud_last_preview_time'
+        var re = /^(.*)svfcloud_last_preview_time=([0-9]{1,13})(.*)$/;
+        var REPEATABLE_INTERVAL = 1000;
+        var canOpen = true;
+
+        var cookie = document.cookie;
+        if ( cookie != null ){
+            var res = cookie.match(re);
+            if (res){
+                var prevOpTime = parseInt(res[2]);
+                var elapsed = Date.now() - prevOpTime;
+                if ( elapsed < REPEATABLE_INTERVAL ){
+                    canOpen = false;
+                }
+            }
+        }
+        if (canOpen){
+            document.cookie = key + '=' + Date.now();
+        } else {
+            document.write("<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8'></head><body><div class='header' style='display:{!IF(errorMessage=="","block;","none;")}'><div class='logo' unselectable='on'/></div><div class='svfMessage'>{!$Label.svfcloud__processing_request}</div></body></html>");
+            document.close;
+            Sfdc.onReady(false);
+        }
+        return canOpen;
+    }
+    function onPostMessage(event) {
+        // only *.svfcloud.com
+        if ( !isSubdomain(event.origin, 'svfcloud.com') ) {
+            return;
+        }
+
+        try {
+            var data = JSON.parse(event.data);
+            switch(data.type) {
+            case 'resize':
+                onResize(data);
+                break;
+            case 'preview':
+                onPreview(data);
+                break;
+            }
+        } catch(e) {
+            // do nothing
+        }
+
+        function onResize(data) {
+            // Windows Edge cannot move window.
+            // https://tunemicky.blogspot.jp/2015/07/windows-10-microsoft-edge.html
+            if ( data.x != null || data.y != null ) {
+                // window position
+                var windowPosition = {
+                    x: window.screenX != null ? window.screenX : window.screenLeft,
+                    y: window.screenY != null ? window.screenY : window.screenTop
+                };
+
+                var x = data.x != null? data.x: windowPosition.x;
+                var y = data.y != null? data.y: windowPosition.y;
+                if ( x !== windowPosition.x || y !== windowPosition.y ) {
+                    window.moveTo(x, y);
+                }
+            }
+
+            if ( data.width != null || data.height != null ) {
+                // window size
+                var windowSize = {
+                    width: window.outerWidth,
+                    height: window.outerHeight
+                };
+
+                var width = data.width != null? data.width: windowSize.width;
+                var height = data.height != null? data.height: windowSize.height;
+                switch(data.fit) {
+                case 'min':
+                    if ( width > windowSize.width ) {
+                        width = windowSize.width;
+                    }
+                    if ( height > windowSize.height ) {
+                        height = windowSize.height;
+                    }
+                    break;
+
+                case 'max':
+                    if ( width < windowSize.width ) {
+                        width = windowSize.width;
+                    }
+                    if ( height < windowSize.height ) {
+                        height = windowSize.height;
+                    }
+                    break;
+                }
+
+                // Microsoft Edge
+                if ( window.navigator.userAgent.indexOf(" Edge/") >= 0 ) {
+                    var screen = window.screen;
+
+                    // Edge の resizeTo() は拡大率などの影響を受けた座標系なので、変換する。
+                    width = Math.floor(width * screen.systemXDPI / screen.deviceXDPI);
+                    height = Math.floor(height * screen.systemYDPI / screen.deviceYDPI);
+
+                    // Edge の時には、利用領域(availWidth/availHeight)より大きい値を渡すと resizeTo が無視されてしまう。
+                    // availWidth/Heigh は zoom 設定などにより、値が変わる。
+                    // ただし、実際に渡せるサイズは利用領域より小さい。
+                    // reizeTo() にはタイトルを含めないサイズが要求されており、尚かつ、利用領域の三辺(下、右、左)にデスクトップ座標で 8px のマージンを持たなければならない。
+                    // 具体的な値を使用すると、サイズが変わったときに対応できないので、90% で処理する。
+                    // 例:
+                    //  availWidth: 2048
+                    //  availHeight: 1071
+                    //  resizeTo(X): 2032 (availWidth - 8 * 2)
+                    //  resizeTo(Y): 1031 (availHeight - (32 + 8))
+                    var screenAvilableSize = {
+                        width: Math.floor(screen.availWidth * 0.9),
+                        height: Math.floor(screen.availHeight * 0.9)
+                    };
+                    if ( width > screenAvilableSize.width ) {
+                        width = screenAvilableSize.width;
+                    }
+                    if ( height > screenAvilableSize.height ) {
+                        height = screenAvilableSize.height;
+                    }
+                }
+
+                if ( width !== windowSize.width || height !== windowSize.height ) {
+                    window.resizeTo(width, height);
+                }
+            }
+        }
+        
+        function onPreview(data) {
+        }
+
+        function isSubdomain(url, hostname) {
+            var result = parseUrl(url);
+            return result.hostname === hostname ||
+                endsWith(result.hostname, '.' + hostname);
+        }
+
+        function parseUrl(url) {
+            var a = document.createElement('a');
+
+            a.href = url;
+
+            // IE doesn't populate all link properties when setting .href with a relative URL,
+            // however .href will return an absolute URL which then can be used on itself
+            // to populate these additional fields.
+            if (!a.host) {
+                a.href = "" + a.href;
+            }
+            return {
+                host: a.host,
+                hostname: a.hostname,
+                hash: a.hash,
+                href: a.href,
+                // IE fix origin support
+                origin: a.origin? a.origin: a.protocol + '//' + a.host,
+                password: a.password,
+                // IE fix for not leading '/'
+                pathname: (startsWith(a.pathname, '/')? '': '/') + a.pathname,
+                port: a.port,
+                protocol: a.protocol,
+                search: a.search,
+                username: a.username
+            };
+        }
+        function startsWith(str, prefix) {
+            if ( typeof(str) !== "string" || typeof(prefix) !== "string" ) {
+                return false;
+            }
+
+            return str.lastIndexOf(prefix, 0) >= 0;
+        }
+        function endsWith(str, suffix) {
+            if ( typeof(str) !== "string" || typeof(suffix) !== "string" ) {
+                return false;
+            }
+
+            return str.indexOf(suffix, str.length - suffix.length) >= 0;
+        }
+    }
+    function frameResize(){
+        var h = $(window).height();
+        var w = $(window).width();
+
+        // padding
+        var b = $(document.body);
+        h -= b.outerHeight() - b.height();
+        w -= b.outerWidth() - b.width();
+        
+        if ( useOAuth() ){
+          $('iframe#oauthFrame').width(w);
+          $('iframe#oauthFrame').height(h);
+        } else {
+          Sfdc.canvas.controller.resize({width : w + "px", height : h + "px"});
+        }
+    }
+
+    $(window).on('load resize', function(){
+         $(this).delay(500).queue(function() {
+           frameResize()
+           $(this).dequeue();
+         });
+    });
+    
+    var canOpen = popupWithRepeatCheck();
+    window.addEventListener('message', onPostMessage, false);
+    </script>
+    <style type="text/css">
+    html, body, body > span > div {
+        width: 100%;
+        height: 100%;
+        margin: 0px;
+    }
+    html, body {
+        overflow: hidden;
+    }
+    .svfMessage {
+        margin: 100px;
+        font-size: 24px;
+        text-align: center;
+    }
+    .header {
+        height: 25px;
+        width: 100%;
+        background-color: #304577;
+        /* for Firefox */
+        background: -moz-linear-gradient(left top, #203567,#4b6094 50%,#203567);
+        /* for Safari,Google Chrome */
+        background: -webkit-gradient(linear, left top, right bottom, from(#203567),color-stop(0.5, #4b6094),to(#203567));
+    }
+    .logo{
+        display: inline-block;
+        background-repeat:no-repeat;
+        width:117px;
+        height:21px;
+        background-size:100% 100%;
+        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOoAAAAqCAYAAAC9fMf6AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4QYaCwUfXQI2jQAAEf1JREFUeNrtXXmUVtWR/xU0bdNNcIFGaFARxRWbYCQuEUEWJw6LQsBAE41R0SFGSRx3o0ZNNNFxNNEzLgkOKogGRRZRVDgMGBBwQbRxNCKbAgKCbM3a3b/549WLl8p9X7/39dfd6Lw65zvd7y5177v31r1VdavqASmkkEIKKaSQQgoppJBCCimkkEIKKaSQQgoppJBCCinUI0hUBsleAHoBoCm/UkQeI3k2gLYAmjq/90XkFYOnFYBTATQWkUmedjoDaCYicz15RQDyReSrdKq+PUDyMAC/BdBIk94WkT+mI/OP8SkFcJ2TNDdT4d/RD2+TzCP5sSfvDq17KMlfkpxK8gvNu9jBLSS7kRxLch3J73ra70TyepIHplP3rVuInc26mZaOyj7j09eMz3N5GcrvjUjfAaC5/iws0b9XAbjFSV8DYIp2oimAZwAM0B31ARF5z3R0mO4ow0VkSzp13zqoBlAJIFx/u9Mh2QeqzPOevCwHuQUAe9IRwAr9v6fJmyYim/T/AQDO1/83APgPQ6RXAngYwPki8r852J1aAOgC4AQAJQAK9R0qAGwEsArARwA+FZGdnvpNARzkiAAEsF5EWMt+5QFoaZI3iEgVyQJtM1dQISLbcrTbHwngTABdARyl/RQdl68ALAUwH8BsEVmb0lxuIFtCPVRlUhe2AVhF8ggApSbvWZ3kxgCu1rTtAG4TkTXOIugO4AYAZSIyuZYL6lht6zyVpVED97CU5GsAxonIW05eBwAzAeQ7hHqBptUGhgN4wHkuB9BHd9PeAJ7K4Tw/AOCuWo5nbwBX6ibcvIbiowCsIzleOaZVKanVHZ98V4SM+j8kh3vSV5FsRPIyfd5Fch7JfyeZrzj7k9xD8kmSJ1kFA8mHbXqWfb+E5EZmB7tJPqNKMJBsTHK2KfNkLfsnJGcanDc5+YOYW/h9bRQ/Oh7VWba9WufjAAfnSST3OmUmphS3z5j/0Izh05lO1BUAZhtZVQC8C2CXypyblH1cD6BcRKpJHgzgVs0vF5Fqp34bAL1FZI6nveYAbhaRrbV8ycsAPI5/1mivUDZ3q3ISBwNorexwE6dcPoCzQlZXWdEnNC2Ec0keKiLrsuzm8QDOMNzIs0aMyOncZzmWZwB4WrkKF3YBeA/ABwA+B7BH5+8oAKeY8iUAHgEwR9niFHLJ+orIaJKf6eCH1y9FAD4UkRcAvOBM6MEAupG8WETu80z4KQBaisjjnrxmAApFZIkn7yQARSIyP+bCOkZlXpdIXwdwL4CFdhMg2RxAewA9AAwFcLpm3SkiG5yiU1UhVqLPxQD6ARid5bgPAVDgPL8mIsszlJ8D4OZazPPnWRLpZCNH7wbwZ90Iy31yOsnvADgHwLUATnNEn09Tcqu7I/gtDyvzkOa1InkTyRkOm3mVU7cxyV4kJ5D8iuRpPkIkeasSupterNdDq0l2StDfe01fnwnZ7hh1G5McTPKven9r8x8yuGeSlCzG9ACSHxhc/UyZgSb/+Xqe98NILvewsH0SvucNKhKd6Jn3lPVNwPpmKlxIcqmHUP9N86816RtJttG8fJITnbzHPPiH6YK1suoFJJdpvTEJXq4RyYVOm1tUQ5mrwfu+WVy7kmwiDp4eRt77iGRhDYQ6sR4Xiejm6sJXJE/PEl9JxAadNaGSPJhkV5LnkxxK8seq/yhVDi3uemnm/AoS9qGpU7cozqatY9ueZG/V81xK8kKS/dRuoEDL9UlCqCUkN3kI9RzNf9Wkj3fq9nPSN5Nsb3CP0LwhJv1IXRRUpdPJCQdumdPuEtUy52oBNyb5N/POd2aB5zGD4zeeMg1JqH08iqOrc9xGVoSqfRtH8rMI5dZekp+Q/C+Sp9aA67skVzq/JxKuhWlO3fLwkIoo34Lk1bp+tmZQYpaTvE6JuDouoZaawQyRdSTZ0qNVHeDsGq87RPoLK/soQQ3ztDkmVuf8/c3X0ymEdSRb5niBXW7e+UO9Z41b/xBlIUOo0Guk/YJQde5eMm0vSfKOdUGouoG/kIX2/i8kD43Aeaop/0pCQl1s5rFdRNnBunkkgS1JCLWvB8FGPbmGOB2cSfIXzrHdi+QOkqNJHm9wtiF5v+8KRnfLXXpSn5+UFVEcdjL/kOMF1ko3gBCqE8ptw0z/Xooo11CEerTOqffaqCEIleQphlMK4Qu9/puqp9tbDjfmQjnJEyJEmRrnIgOhvmsIq52n3E0kqyIIsVxP2AX6fnsyEG7G65kdAMbr1Ut4BfOJiOxUbel1AKaKyMemXrFewczz4CwC8JsIK5n2AP5FRGbXYg08DWCQ83y9WibdKyJ/r+0CE5H1JCcDGBEmITBceD0mijLzPAb7F3RDYLkVQiWA1xpQqdJBbxcOd5IXAbgPwEwRWe/KnADaAegL4BoAR2vWiQBeJNlLRD6vx75fAeBuk/w+gIcAzACwRkT2qGxbpLcrAwFcqu+RdcOtVWi/Jkqdb2VOV2WfgTXo4juVVEYeQbJvgj7mkZwSsYNNUeOLniTb6sRmMw4/IFnp4F4fxV7ZRUdym1NvuW54cU7UCfW0uB4x7X5WF04RcU5UPbWmmv48GzVmnrU63XIl7pzX5YlK8nhNc+GJOGOpa/PZJCcqVMYbBeBsAJ0BNAPwaye/CQKztyv0b1/fpAD4MYAH7WAC+JXuIOdqWoHiGIzAxa5Y8cY98Sp1J2uNwBY1hOYA+usPCGxSl5FcDOBNBHapn8RsZgECo4+uDgfRF0BNyoiBOn4hPJfAuKMjyZH42i0sLlQDmCAiX8Ysbw0b1iIwEGkI6IPgrjqEdwBcJiLbY6yDL0iWITDY6eSMfx8Ar9ZD32/EvmaW0wBcLiKVMfq+muTjSjNZK0+2KTsS7ioTMgm8JMtUwXOySR+i2rJ97gjV1MyFlXqBnnTHLlYXurhmb9tITiLZIyb+q0z9GZnU83rSLzRXO6UZyg/MoflgEs35XFN3eh2d3HFO1AlGF9A/i3YGmjUwsa5PVJLtVIkawnarq4mBP/49qmew9nkZkmcbrddxpu5PNe8nnqN9vTMBZzoaxxmmvXG1XBC9SY5XFq4qxqKuVNV+sxrwlhit9057qe9RXOxNQNi5JNQuCcZrXraLN5eEqtrxNU7+UnvXHLOdpiT/bsSU4jom1KEG79Qs+h3f1pfkQfjapC6E8c7/oxw28g4R+cjV1CEweSsTkfEGxy3KLgLAXwGESqdjsK/9KxIoaaLYiBkAZqjlUwcErm6lAE4C0FGVFO4YNAYwEsCRJC+Icg0TkTU6sRdpUgECj5rbI7oy1LTzZEI3uc0AlmcxBNWqFExS3oUCNAx0QOChFcJ7IrIji/nfSXKhznUophyDwL2yrsBujLNzgTSTjHoGAvewLSrHvQhgohLi6Sq3Pgbgfle+U6+TQQAGi8gHhvi76eKeqnVfc4z2yxDYE1eodmyWlqs1aCiXd/QX9qWZTmAfABc6sgwA/BCBffDIDGjHaL3wZBxC8h4R2WUVafja/xYAVgNIelLNAvCjLN89yYZg5b9DSDYyjhX1Aa2NPL68FrisjXFJHffdKk2X1TWhFiCI1DDNYzB+CIA+IrIwot49EadRCYIrmLlmMYsS6HBV7Kyu65WgSolFABaRfERP+usdwruU5BPGN9WFuQAWAwjDyByn1xuWCzgbgGvK+EI2MaBq66geE1aY57Y611/WM6EeYJ4raoHLbj5N6rjvlgvZVaeEKiI+Af8sAB1FZLQnrzkCD5llnrxTABwuIs+Z9PYIHLu/BPCfCFykTtPgV210d3pORKbUMdFuA3CjXrNc7ExoGYC3IursITnWIVTR8pZQ3bvTvQDGYv+Fxea5GIFL3hv13A8bBqg2llFWtq2q477vMc9FuUBao7pfvSDOUxOrGQhU9rZMKQIf1AqP4uh+BNEQNjr4hpOcpCfag5rXU1ns5xFEJLheF3mrelwgDyO45A+haw3lJ6hoEELf0OE8fH8ELl8hhFc7+yvMxT/7H/dvgH6sx74+tIfXAtcR5nldHff9C4+8XbeEqizpfwOYpHLbSyLysilTprLr864jNclBCGLnXANgnmNxNEBPlfMQxNvZAOBvngF1J62+YJUqbkJonsmwX0OMvGJOIPcuuT8CB/UQnhKRqv2YUD/UzdOF4aGmtB5hWbixK3SO665o1mYTs9luBhBaqFUa5VkS/NWIdsa3cb7Oqo8TtSsCbWbIjtxpBmIYgHEA7haRBU56MYA/OoK1a+xgjfEXqrwYJeTXZ0zfIiNjVKHm6AhPmjLD9apJEGh73Q1n8n5MpNAL+T979Aq31XM/1gNw9R++G4E4cJay7i5Hs9ZZV24wu5YJrNUKER03aoHhyrpnurqLyfrXuCON03ucDdZ0UN2ElpAc6ql3n+v0rBH3QPJwcxn8Dxcqko9G3Gt2TtjnY+OYmUXUvTapMTzJAh0H9071aJLHqWFDCI8n6EdDurkVkVxk2q8i+fMs8Z1m/YJJnmDuUV/x1BviMSrJS9BugcctcYiTX0jyU+NzWxIDb2P1ymHEPWoeyfn2jjZh3x9O4o/aWQn0odAayclrQfJ2n+O0OvRuVALt7bKODiFsIjmL5K+dC+jpHkLdlcT5W52B55B8X92L8hMSh7XPvDRm3ZtNvetI3mgW+pnfBEINlYa64VhivVedHOLgaKUB8naQvN2ju9hsoke09uhGLKE9GMfHWIlwjCcoX74pZ21qf1kD3oM8eH22vsM8Zf5Sk5Wdrl9fUMGMhNqN5Pci8lpHWe+Q/FeS34/IG6EubC08eb8ieY8azl+ikfi6qZwRd4F1MqfYQjX3O9ZHtDrwPTQq4l6Pr+mBMds9yhjcf2pcsxYm3FEblFC1D1dEmGAuJflbJeYSdbgoJNlczed6kPw9yRXm6wpNHNx5JN/xfIHhSjeShDps2OAFL2vbvvlspkEL5npc4nyubv08kSyGWRdLdc+82ITQ2Z2BUPPUJNXCOyR/4tmUvqPuodOi3Nwk4eQ1B9DWFxhbPeqPF5ExJr0jAoPonQii0XVXxVFblX/aIDBsOA6B0QEd+bkxgDEiMi5m//6g2mILO1VBsQpBxL98BEG7jgBwmKf8VgD9I6IlRrU9Ud/TB6NE5E9JCFUVdCG8KCKDGoBYR6gGviiD/mCLymT5KrdFBQ4vdQ1gSN4I4B5PuVki0tMpd67qQVylHBF8leFDVUY20rXUCYG7mAtrAQz1zaVunlOgTiFGIbRC36tYcboKtWkAVgL4ubNeTnTd6PSqbxK+DvBmFaSfIIjieaBqtds7+R8jsMwKx3JskkkrJfknvXJw0w/T9Aod1DDawiXKzoYnzVCPfWUIN5B8MyLv1gR9/Klj7J8tLCXZM4tFPSAC3yY7Zt+EE9Xpy+kk36jFeK7R7xAVeriZBZ7yr0aIU29m0fZ0a4Puwd0uIohfFExW7mGUcerwOY63JPlUwpjI81W/4UYrGRt3ssqUAM406f0d4+k5odaM5Lmm8a3q0RJlbP4zre+DmxMurFYqCy9OOEArlfVuneWCLjQG4CE8lQWuHxkcU9CAQLKJBp172aMM9EGVKtjuiPJDVrwlKna4kRlmZlAO/UyDoW/P0PYmVd4MjKvFVSeA+0yYHF+kiJGOYvRClb93KGvdNgP+c1Rns6GG9XdXKG7p5hjiHx0nctogBF72I0XkUXdHBPC2w2oM1ni/0EjyFzlo5ohIdw0n6mMBByKIA/sDT94tInJ3FovrAADfQ/CdlM7K4hYoO00EFiTrlH2aB+BN5/s42S7oLnolFbLvgsCg/LOEeEJ/WiqOtSLy9v5whaOfLOmi1x5tnfvHKgR3n8sR2GqX+77lkwHn0Qj8dddGmKZacaqTjnVTHacKZVfLs/2EhhqrnKxrukjxblE2+133fVRHEwY0q0bwOdLKGvC3QRBxogOAULG0Tdngxe760w2uqc7/1po6fiLJ9yKuYO5wds+JTsykYhNXiCRv07y7I3aT7h4FQFYnag3vI6pZE6SQwjcIanJz64/g04dLrLwK4HIEbm+PAnjDMRofiMDsb72euDMdYbi9p6lKBBYjUf6GOTOi1j4ynfYUvmmQyXn5EAC7RaTCd3UDYLuILLInFoIwKnsAzLffZiF5kbIrm/S3WX/vA7hM2VP7hfPpIjIrnaoU/j/D/wEDJ0gka/UghwAAAABJRU5ErkJggg==');
+    }
+    .lightningCanvas{
+    }
+    </style>
+    <div id="oauthBase" style='display:none'>
+      <apex:iframe id="oauthFrame" width="100%" height="100%" scrolling="false" rendered="{!errorMessage==''}"></apex:iframe>
+        <script type="text/javascript">
+          if ( useOAuth() && canOpen ){
+            $('div#oauthBase').show();
+            frameResize();
+            var form = $("<form id='initForm' method='POST' target='oauthFrame' action='https://{!SvfCloudServiceHost}/svf-cloud-service/sfdc/print'></form>");
+            $("<input type='hidden' name='auth_type'/>").attr("value","oauth").appendTo(form);
+            $("<input type='hidden' name='signature'/>").attr("value","{!CanvasSignatureBase64}").appendTo(form);
+            $("<input type='hidden' name='canvas'/>").attr("value","{!CanvasParamsBase64}").appendTo(form);
+            $("body").append(form); 
+            form.submit();
+            form.remove();
+          } else {
+            $('div#oauthBase').remove();
+          }
+        </script>
+    </div>
+    <div id="canvasBase" style='display:none'>
+        <script type="text/javascript">
+          <!-- div#canvasBaseが生成された後で、かつapex:canvasのscriptが実行される前にdiv#canvasBase以下を削除する -->
+          if ( useOAuth() || !canOpen ){
+            $('div#canvasBase').remove();
+          } else {
+            $('div#canvasBase').show();
+          }
+        </script>
+      <apex:canvasApp width="100%" height="100%" maxWidth="infinite" maxHeight="infinite" namespacePrefix="{!NameSpace}" developerName="{!CanvasPreview}" applicationName="{!CanvasPreview}" parameters="{appId: '{!sObjectTypeName}', id: '{!id}', key: '{!key}', buttonFullName: '{!buttonFullName}', query: '{!query}', sortKey: '{!sortKey}', dir: '{!dir}', layout: '{!layout}',q1: '{!q1}',q2: '{!q2}',q3: '{!q3}',q4: '{!q4}',q5: '{!q5}',q6: '{!q6}',q7: '{!q7}',q8: '{!q8}',q9: '{!q9}', AccessPoint:'{!AccessPoint}' }" scrolling="no" rendered="{!IF(errorMessage=='','true','false')}" />
+    </div>
+    
+</apex:page>
